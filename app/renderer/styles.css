@@ -1,0 +1,157 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  background: #0d1117;
+  color: #c9d1d9;
+  font: 13px "Segoe UI", "Microsoft JhengHei", sans-serif;
+  overflow: hidden;
+}
+#app { display: flex; }
+
+/* ---- sidebar ---- */
+#sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: #161b22;
+  border-right: 1px solid #30363d;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+#side-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #30363d;
+}
+.logo { font-weight: 700; font-size: 15px; color: #58a6ff; flex: 1; }
+#side-head button {
+  background: none;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+}
+#side-head button:hover { background: #21262d; }
+
+#settings-panel { padding: 12px; border-bottom: 1px solid #30363d; }
+#settings-panel label { display: block; margin-bottom: 8px; color: #8b949e; font-size: 12px; }
+#settings-panel input {
+  width: 100%;
+  margin-top: 3px;
+  padding: 6px 8px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+}
+#btn-save {
+  width: 100%;
+  padding: 7px;
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#error-bar {
+  margin: 8px 12px;
+  padding: 8px 10px;
+  background: #3d1d20;
+  border: 1px solid #f85149;
+  border-radius: 6px;
+  color: #ffa198;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.section-title {
+  padding: 12px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+#sidebar ul { list-style: none; }
+#sidebar li { padding: 8px 12px; border-bottom: 1px solid #21262d; }
+.muted { color: #565e66; }
+
+/* ticket 項目 */
+.ticket-item { cursor: pointer; }
+.ticket-item:hover { background: #1c2129; }
+.ticket-item .key { color: #58a6ff; font-weight: 600; margin-right: 6px; }
+.ticket-item .chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #1f6feb33;
+  color: #79c0ff;
+  margin-right: 4px;
+}
+.ticket-item .sum { display: block; margin-top: 3px; color: #8b949e; font-size: 12px; }
+.ticket-item.busy { opacity: 0.5; pointer-events: none; }
+
+/* 工作區 session 項目 */
+.sess-item .row1 { display: flex; align-items: center; gap: 6px; }
+.sess-item .key { color: #d2a8ff; font-weight: 600; flex: 1; }
+.sess-item .branch { color: #565e66; font-size: 11px; display: block; margin: 2px 0 6px; }
+.sess-item button {
+  font-size: 11px;
+  padding: 3px 8px;
+  margin-right: 6px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.sess-item button:hover { background: #30363d; }
+.sess-item button.danger:hover { background: #da3633; border-color: #da3633; }
+
+/* 狀態燈 */
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot.run { background: #3fb950; }
+.dot.dead { background: #6e7681; }
+
+/* ---- main ---- */
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#tabbar {
+  display: flex;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  overflow-x: auto;
+  min-height: 36px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-right: 1px solid #30363d;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #8b949e;
+}
+.tab.active { background: #0d1117; color: #c9d1d9; border-top: 2px solid #58a6ff; }
+.tab .close { color: #565e66; padding: 2px 4px; border-radius: 4px; }
+.tab .close:hover { background: #30363d; color: #f85149; }
+
+#terms { flex: 1; position: relative; min-height: 0; }
+.term-holder { position: absolute; inset: 0; padding: 6px; display: none; }
+.term-holder.active { display: block; }
+#empty-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #30363d;
+  font-size: 16px;
+}

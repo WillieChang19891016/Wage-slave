@@ -2,6 +2,15 @@
 
 Jira-Driven 多 Agent 並行 IDE — 點一張 Jira ticket，自動開 git worktree + 分支 + 啟動一個 Claude Code session，多個 session 並行處理。
 
+## 目前進度
+
+- ✅ **Phase 0**：三個技術 spike 全數驗證通過（2026-07-21）
+- 🚧 **Phase 1**：[app/](./app/) — Electron 主程式（Jira 側欄 + 多 tab terminal + worktree 自動化），模組冒煙測試已過，GUI 驗收中
+
+```powershell
+cd app; npm install; npm start
+```
+
 ## Phase 0：技術驗證 Spikes
 
 三個 spike 各自獨立，目的是在搭 Electron UI 之前，先把三個最大的技術風險打穿。

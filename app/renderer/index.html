@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Wage-slave</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div id="side-head">
+        <span class="logo">Wage-slave</span>
+        <button id="btn-refresh" title="重新整理 ticket 清單">⟳</button>
+        <button id="btn-settings" title="設定">⚙</button>
+      </div>
+
+      <div id="settings-panel" class="hidden">
+        <label>Jira Domain <input id="set-domain" placeholder="onetw.atlassian.net" /></label>
+        <label>Email <input id="set-email" placeholder="you@company.com" /></label>
+        <label>API Token <input id="set-token" type="password" /></label>
+        <label>目標 repo 根目錄 <input id="set-repo" placeholder="C:\path\to\repo" /></label>
+        <button id="btn-save">儲存設定</button>
+      </div>
+
+      <div id="error-bar" class="hidden"></div>
+
+      <div class="section-title">工作區（有 worktree 的 ticket）</div>
+      <ul id="session-list"><li class="muted">（無）</li></ul>
+
+      <div class="section-title">我的 Jira tickets</div>
+      <ul id="ticket-list"><li class="muted">載入中…</li></ul>
+    </aside>
+
+    <main id="main">
+      <div id="tabbar"></div>
+      <div id="terms">
+        <div id="empty-hint">← 點一張 ticket，自動開 worktree + 分支 + Claude session</div>
+      </div>
+    </main>
+  </div>
+  <script src="./renderer.js"></script>
+</body>
+</html>
