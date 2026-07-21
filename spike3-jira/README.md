@@ -23,6 +23,11 @@ API token 申請：https://id.atlassian.com/manage-profile/security/api-tokens
 
 ## 通過標準
 
-- [ ] `me` 顯示自己的 displayName
-- [ ] `list` 列出自己的未完成 ticket
-- [ ] `show` 的描述輸出可讀（段落、清單、code block 都有基本處理）
+- [x] `me` 顯示自己的 displayName
+- [x] `list` 列出自己的未完成 ticket
+- [x] `show` 的描述輸出可讀（段落、清單、code block 都有基本處理）
+
+## 驗證紀錄（2026-07-21，onetw.atlassian.net / API token）
+
+三個指令實測通過。注意：很多 ticket 的描述只寫「請查看主單」——
+正式版組初始 prompt 時要順著 issue link 把主單（parent / blocks）內容一起抓進來。
