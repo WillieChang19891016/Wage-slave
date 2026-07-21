@@ -7,7 +7,8 @@ class Store {
     this.file = file;
     let saved = {};
     try {
-      saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // 去 BOM：手動編輯/PowerShell 寫的檔案常帶 BOM，JSON.parse 會炸掉導致設定「消失」
+      saved = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''));
     } catch {
       /* 首次啟動沒檔案 */
     }

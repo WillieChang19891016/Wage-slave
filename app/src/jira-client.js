@@ -28,7 +28,8 @@ function adfToText(node) {
 
 class JiraClient {
   constructor({ domain, email, token } = {}) {
-    this.domain = domain;
+    // 容錯：使用者常把 domain 連 https:// 或結尾斜線一起貼進來
+    this.domain = (domain || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     this.email = email;
     this.token = token;
   }
