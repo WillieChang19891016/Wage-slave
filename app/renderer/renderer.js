@@ -2,7 +2,7 @@ const { ipcRenderer } = require('electron');
 const { Terminal } = require('@xterm/xterm');
 const { FitAddon } = require('@xterm/addon-fit');
 
-// id(= ticket key) -> { term, fit, holder, tab, dot, running }
+// id(= ticket key) -> { term, fit, pane, dot, running }
 const views = new Map();
 let activeId = null;
 let persisted = []; // session:list 的結果
@@ -10,7 +10,6 @@ let persisted = []; // session:list 的結果
 const $ = (sel) => document.querySelector(sel);
 const ticketListEl = $('#ticket-list');
 const sessionListEl = $('#session-list');
-const tabbarEl = $('#tabbar');
 const termsEl = $('#terms');
 const emptyHintEl = $('#empty-hint');
 const errorBarEl = $('#error-bar');
@@ -112,48 +111,66 @@ async function refreshSessions() {
   }
 }
 
-// ---------- terminal / tab ----------
-function createView(id) {
-  const holder = document.createElement('div');
-  holder.className = 'term-holder';
-  termsEl.appendChild(holder);
-
-  const term = new Terminal({
-    fontFamily: 'Consolas, "Courier New", monospace',
-    fontSize: 14,
-    theme: { background: '#0d1117' },
-    allowProposedApi: true,
+// ---------- terminal grid：一格一張 Jira task，全部同時可見 ----------
+// 格數 → 欄數：1 全螢幕、2 對半、3-4 兩欄、5+ 三欄
+function relayout() {
+  const n = views.size;
+  const cols = n <= 1 ? 1 : n <= 4 ? 2 : 3;
+  termsEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  emptyHintEl.style.display = n ? 'none' : 'flex';
+  // 等 grid 排完再 fit，每格的 cols/rows 變了會經 term.onResize 通知 pty
+  requestAnimationFrame(() => {
+    for (const v of views.values()) v.fit.fit();
   });
-  const fit = new FitAddon();
-  term.loadAddon(fit);
-  term.open(holder);
-  term.onData((data) => ipcRenderer.send('session:write', { id, data }));
-  term.onResize(({ cols, rows }) => ipcRenderer.send('session:resize', { id, cols, rows }));
-  holder.addEventListener('mousedown', () => term.focus());
+}
 
-  const tab = document.createElement('div');
-  tab.className = 'tab';
+function createView(id, summary = '') {
+  const pane = document.createElement('div');
+  pane.className = 'pane';
+
+  const head = document.createElement('div');
+  head.className = 'pane-head';
   const dot = document.createElement('span');
   dot.className = 'dot dead';
-  const label = document.createElement('span');
-  label.textContent = id;
+  const key = document.createElement('span');
+  key.className = 'key';
+  key.textContent = id;
+  const sum = document.createElement('span');
+  sum.className = 'sum';
+  sum.textContent = summary;
   const close = document.createElement('span');
   close.className = 'close';
   close.textContent = '×';
-  close.title = '關閉分頁（結束 process，保留 worktree，之後可接回）';
+  close.title = '關閉這格（結束 process，保留 worktree，之後可接回）';
   close.addEventListener('click', async (e) => {
     e.stopPropagation();
     await ipcRenderer.invoke('session:kill', { ticket: id });
     removeView(id);
     refreshSessions();
   });
-  tab.append(dot, label, close);
-  tab.addEventListener('click', () => activate(id));
-  tabbarEl.appendChild(tab);
+  head.append(dot, key, sum, close);
 
-  const view = { term, fit, holder, tab, dot, running: false };
+  const body = document.createElement('div');
+  body.className = 'pane-body';
+  pane.append(head, body);
+  termsEl.appendChild(pane);
+
+  const term = new Terminal({
+    fontFamily: 'Consolas, "Courier New", monospace',
+    fontSize: 13,
+    theme: { background: '#0d1117' },
+    allowProposedApi: true,
+  });
+  const fit = new FitAddon();
+  term.loadAddon(fit);
+  term.open(body);
+  term.onData((data) => ipcRenderer.send('session:write', { id, data }));
+  term.onResize(({ cols, rows }) => ipcRenderer.send('session:resize', { id, cols, rows }));
+  pane.addEventListener('mousedown', () => activate(id));
+
+  const view = { term, fit, pane, dot, sumEl: sum, running: false };
   views.set(id, view);
-  emptyHintEl.style.display = 'none';
+  relayout();
   return view;
 }
 
@@ -161,28 +178,20 @@ function removeView(id) {
   const v = views.get(id);
   if (!v) return;
   v.term.dispose();
-  v.holder.remove();
-  v.tab.remove();
+  v.pane.remove();
   views.delete(id);
   if (activeId === id) {
     activeId = null;
     const next = views.keys().next().value;
     if (next) activate(next);
   }
-  if (!views.size) emptyHintEl.style.display = 'flex';
+  relayout();
 }
 
 function activate(id) {
-  for (const [vid, v] of views) {
-    v.holder.classList.toggle('active', vid === id);
-    v.tab.classList.toggle('active', vid === id);
-  }
+  for (const [vid, v] of views) v.pane.classList.toggle('active', vid === id);
   activeId = id;
-  const v = views.get(id);
-  if (v) {
-    v.fit.fit();
-    v.term.focus();
-  }
+  views.get(id)?.term.focus();
 }
 
 function setRunning(id, running) {
@@ -208,8 +217,9 @@ async function openSession(ticket) {
   v.term.write(hasRecord ? '\x1b[36m[接回 session…]\x1b[0m\r\n' : '\x1b[36m[抓 Jira 內容、建 worktree、啟動 claude…]\x1b[0m\r\n');
 
   try {
-    await ipcRenderer.invoke(channel, { ticket, cols: v.term.cols, rows: v.term.rows });
+    const meta = await ipcRenderer.invoke(channel, { ticket, cols: v.term.cols, rows: v.term.rows });
     setRunning(ticket, true);
+    if (meta.summary) v.sumEl.textContent = meta.summary;
     v.term.focus();
   } catch (e) {
     showError(e.message);
@@ -227,13 +237,12 @@ ipcRenderer.on('pty:exit', (_e, { id, code }) => {
   refreshSessions();
 });
 
-// resize 防抖（ConPTY 死鎖防護，spike1 的教訓）
+// resize 防抖（ConPTY 死鎖防護，spike1 的教訓）— grid 模式下全部格子都要 fit
 let resizeTimer = null;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const v = views.get(activeId);
-    if (v) v.fit.fit();
+    for (const v of views.values()) v.fit.fit();
   }, 200);
 });
 
