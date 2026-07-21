@@ -12,11 +12,11 @@ npm start               # 第二關：Electron 視窗內互動操作 claude
 
 ## 通過標準
 
-- [ ] `test:headless` 印出 claude 版本號 + `PASS ✅`
-- [ ] Electron 視窗內 claude TUI 正常渲染、可打字、Enter / 方向鍵 / Ctrl+C 可用
-- [ ] 中文輸入與顯示正常
-- [ ] 拉伸視窗後 TUI 重繪不破版
-- [ ] permission prompt（y/n 選單）可正常互動
+- [x] `test:headless` 印出 claude 版本號 + `PASS ✅`
+- [x] Electron 視窗內 claude TUI 正常渲染、可打字、Enter / 方向鍵 / Ctrl+C 可用
+- [x] 中文輸入與顯示正常
+- [x] 拉伸視窗後 TUI 重繪不破版
+- [x] permission prompt（y/n 選單）可正常互動
 
 ## 驗證紀錄（2026-07-21，node v24.11.1 / Windows 11）
 
@@ -26,7 +26,11 @@ npm start               # 第二關：Electron 視窗內互動操作 claude
   - `test:headless` 在 node 24 下 PASS
   - 用 `ELECTRON_RUN_AS_NODE=1` 跑同一測試（Electron runtime ABI）也 PASS
   - 不需要 VS Build Tools、不需要 electron-rebuild
-- 剩最後一關：`npm start` 開視窗人工驗證 xterm.js 渲染（中文 / resize / permission prompt）
+- ✅ `npm start` GUI 人工驗證通過（中文 / resize / permission prompt）
+- ⚠️ 第一輪 GUI 測試出現「畫面凍住」，兩個修正後不再復現（**正式版必帶**）：
+  1. xterm 失去鍵盤焦點看起來就像凍住 → 啟動自動 `term.focus()` + 點擊終端機區域回焦
+  2. 連續 resize 事件直灌 ConPTY 是 node-pty win32 已知死鎖來源 → resize 防抖 200ms
+  3. 狀態列改成診斷儀表（pid / 最後輸出 / 最後按鍵 / focus），凍住時可一眼分辨死因
 
 ## 正式版注意
 

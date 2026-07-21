@@ -21,19 +21,46 @@ fit.fit();
 //  2. 中文輸入與顯示正常
 //  3. 視窗 resize 後 TUI 重繪不破版
 //  4. permission prompt (y/n) 可互動
-ipcRenderer
-  .invoke('pty:spawn', { id: ID, cols: term.cols, rows: term.rows })
-  .then(({ pid }) => (statusEl.textContent = `claude running (pid ${pid}) — 測試：中文輸入、resize、Ctrl+C`));
+// 診斷資訊：分辨「pty 死了」還是「只是失去焦點」
+let pid = '?';
+let lastData = null;
+let lastKey = null;
+function refreshStatus() {
+  const fmt = (d) => (d ? d.toLocaleTimeString('zh-TW', { hour12: false }) : '—');
+  statusEl.textContent =
+    `pid ${pid} | 最後輸出 ${fmt(lastData)} | 最後按鍵 ${fmt(lastKey)} | ` +
+    `focus ${term.textarea === document.activeElement ? '✅' : '❌(點一下終端機)'}`;
+}
+setInterval(refreshStatus, 1000);
 
-ipcRenderer.on(`pty:data:${ID}`, (_e, data) => term.write(data));
+ipcRenderer.invoke('pty:spawn', { id: ID, cols: term.cols, rows: term.rows }).then((r) => {
+  pid = r.pid;
+  term.focus(); // xterm 沒焦點時打字沒反應，看起來像凍住
+});
+
+ipcRenderer.on(`pty:data:${ID}`, (_e, data) => {
+  lastData = new Date();
+  term.write(data);
+});
 ipcRenderer.on(`pty:exit:${ID}`, (_e, code) => {
   statusEl.textContent = `claude exited (code ${code})`;
   term.write(`\r\n\x1b[33m[process exited: ${code}]\x1b[0m\r\n`);
 });
 
-term.onData((data) => ipcRenderer.send('pty:write', { id: ID, data }));
+term.onData((data) => {
+  lastKey = new Date();
+  ipcRenderer.send('pty:write', { id: ID, data });
+});
 
+// 點終端機區域一律拉回焦點
+document.getElementById('terminal').addEventListener('mousedown', () => term.focus());
+
+// resize 防抖：連續 resize 事件打進 ConPTY 是已知的死鎖來源（node-pty win32）
+let resizeTimer = null;
 window.addEventListener('resize', () => {
-  fit.fit();
-  ipcRenderer.send('pty:resize', { id: ID, cols: term.cols, rows: term.rows });
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    fit.fit();
+    ipcRenderer.send('pty:resize', { id: ID, cols: term.cols, rows: term.rows });
+  }, 200);
 });
