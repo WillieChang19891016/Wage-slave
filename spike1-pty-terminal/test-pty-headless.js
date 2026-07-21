@@ -1,7 +1,7 @@
 // 無 UI 驗證：node-pty 在 Windows (ConPTY) 能不能 spawn claude 並拿到輸出。
 // 先跑這個，通過了再跑 npm start 驗證 xterm.js 渲染。
 const os = require('os');
-const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+const pty = require('@lydell/node-pty');
 
 const isWin = os.platform() === 'win32';
 const shell = isWin ? 'cmd.exe' : 'bash';

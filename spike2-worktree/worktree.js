@@ -12,7 +12,12 @@ const path = require('path');
 const WORKTREE_ROOT = path.join('.claude', 'worktrees');
 
 function git(...args) {
-  return execFileSync('git', args, { encoding: 'utf8' }).trim();
+  try {
+    return execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }).trim();
+  } catch (e) {
+    e.message = (e.stderr || e.message).toString().trim();
+    throw e;
+  }
 }
 
 function repoRoot() {

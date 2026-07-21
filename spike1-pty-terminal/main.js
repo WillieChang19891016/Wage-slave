@@ -3,7 +3,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const os = require('os');
 const path = require('path');
-const pty = require('@homebridge/node-pty-prebuilt-multiarch');
+const pty = require('@lydell/node-pty');
 
 const sessions = new Map(); // id -> ptyProcess
 
