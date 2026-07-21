@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Wage-slave spike1</title>
+  <link rel="stylesheet" href="./node_modules/@xterm/xterm/css/xterm.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #1e1e1e; }
+    #status { color: #9cdcfe; font: 12px Consolas, monospace; padding: 4px 8px; }
+    #terminal { height: calc(100% - 24px); }
+  </style>
+</head>
+<body>
+  <div id="status">spawning claude...</div>
+  <div id="terminal"></div>
+  <script src="./renderer.js"></script>
+</body>
+</html>
