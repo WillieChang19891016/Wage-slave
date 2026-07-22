@@ -95,6 +95,7 @@ body {
   color: #79c0ff;
   margin-right: 4px;
 }
+.ticket-item .chip.started { background: #23863633; color: #3fb950; }
 .ticket-item .sum { display: block; margin-top: 3px; color: #8b949e; font-size: 12px; }
 .ticket-item.busy { opacity: 0.5; pointer-events: none; }
 

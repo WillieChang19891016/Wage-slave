@@ -61,8 +61,10 @@ async function refreshTickets() {
     for (const i of issues) {
       const li = document.createElement('li');
       li.className = 'ticket-item';
+      const started = persisted.some((s) => s.ticket === i.key);
       li.innerHTML =
         `<span class="key">${i.key}</span><span class="chip">${i.fields.status?.name || '?'}</span>` +
+        (started ? '<span class="chip started">已開工</span>' : '') +
         `<span class="sum">${escapeHtml(i.fields.summary || '')}</span>`;
       li.addEventListener('click', () => openSession(i.key));
       ticketListEl.appendChild(li);
@@ -103,7 +105,8 @@ async function refreshSessions() {
       if (!confirm(`清除 ${s.ticket}?\n會 kill session、移除 worktree 和分支，未 push 的變更會消失。`)) return;
       await ipcRenderer.invoke('session:cleanup', { ticket: s.ticket });
       removeView(s.ticket);
-      refreshSessions();
+      await refreshSessions();
+      refreshTickets();
     });
     li.appendChild(btnOpen);
     li.appendChild(btnClean);
@@ -226,7 +229,8 @@ async function openSession(ticket) {
     showError(e.message);
     v.term.write(`\x1b[31m${e.message}\x1b[0m\r\n`);
   }
-  refreshSessions();
+  await refreshSessions();
+  if (!hasRecord) refreshTickets(); // 新開工的單 → 更新「已開工」徽章
 }
 
 // ---------- pty 事件 ----------
@@ -250,11 +254,11 @@ window.addEventListener('resize', () => {
 // ---------- init ----------
 (async () => {
   const s = await loadSettings();
+  await refreshSessions(); // 先載工作區，ticket 清單的「已開工」徽章才判斷得到
   if (!s.jiraDomain || !s.jiraToken || !s.repoRoot) {
     $('#settings-panel').classList.remove('hidden');
     ticketListEl.innerHTML = '<li class="muted">（請先完成設定）</li>';
   } else {
     refreshTickets();
   }
-  refreshSessions();
 })();
