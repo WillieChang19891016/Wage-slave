@@ -38,14 +38,23 @@ renderer/               vanilla JS + xterm.js（無 bundler）
 - token 明文存 `%APPDATA%\wage-slave\settings.json`（等同 .env 的信任等級）；正式分發前應改 safeStorage
 - `nodeIntegration: true` 是 Phase 1 便宜行事，分發前改 preload + contextBridge
 
-## Phase 1 驗收清單
+## Phase 1 驗收清單（2026-07-22 全過）
 
 - [x] 模組冒煙測試：JiraClient（list + composeTaskBrief 跟主單）、WorktreeManager（add/exclude/remove）、SessionManager（spawn claude）
-- [ ] GUI：點 ticket 一路開到 claude session，初始 prompt 有任務內容
-- [ ] 同時 2+ session 並行互不干擾
-- [ ] 關 app 重開 → 接回既有 session（--continue）
-- [ ] 清除流程：worktree + 分支乾淨移除
+- [x] GUI：點 ticket 一路開到 claude session，初始 prompt 有任務內容
+- [x] 同時 2+ session 並行互不干擾（split pane grid）
+- [x] 關 app 重開 → 接回既有 session（--continue）
+- [x] 清除流程：worktree + 分支乾淨移除
 
-## Phase 2 預告
+驗收抓到並修掉的 bug：settings BOM、jira domain 帶 https://、
+巢狀 CLAUDE* env 汙染導致對話不存檔、關窗時對已銷毀 webContents send 崩潰。
 
-hooks 狀態偵測（🟡 等輸入 + 桌面通知）、git status 摘要、一鍵 push + 開 GitLab Draft MR + 回填 Jira。
+## Phase 2（hook 狀態 + 多 repo，2026-07-22）
+
+- [x] HookServer：per-session `--settings` 注入，Stop / Notification / UserPromptSubmit
+  事件 curl 回 localhost（E2E 驗證：送 prompt → 🟢 → 回完話 → 🟡）
+- [x] 狀態燈三態：🟢 工作中 / 🟡 等輸入 / 🔴 要權限（pulse）
+- [x] 視窗不在前景時桌面通知，點通知聚焦視窗
+- [x] 多 repo：設定填 repo 清單，側欄下拉選目標 repo，session 綁定建立當時的 repo
+- [ ] git 變更摘要顯示在 pane header
+- [ ] 一鍵 push + 開 GitLab Draft MR + 回填 Jira comment
