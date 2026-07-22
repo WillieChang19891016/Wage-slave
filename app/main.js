@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { JiraClient } = require('./src/jira-client');
 const { WorktreeManager } = require('./src/worktree-manager');
 const { SessionManager } = require('./src/session-manager');
@@ -48,6 +49,10 @@ app.whenReady().then(() => {
       nodeIntegration: true,
       contextIsolation: false,
     },
+  });
+  // renderer 的 console/錯誤轉印到 stdout，headless 也能 debug UI 層
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2) console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 });
@@ -101,12 +106,33 @@ ipcMain.handle('session:start', async (_e, { ticket, cols, rows }) => {
   return { ...meta, pid, running: true };
 });
 
-ipcMain.handle('session:resume', (_e, { ticket, cols, rows }) => {
+// claude 把對話存在 ~/.claude/projects/<cwd 編碼>/*.jsonl；沒有就不能 --continue
+function hasConversation(cwd) {
+  const dir = path.join(os.homedir(), '.claude', 'projects', cwd.replace(/[\\/:.]/g, '-'));
+  try {
+    return fs.readdirSync(dir).some((f) => f.endsWith('.jsonl'));
+  } catch {
+    return false;
+  }
+}
+
+ipcMain.handle('session:resume', async (_e, { ticket, cols, rows }) => {
   const meta = state.get().sessions[ticket];
   if (!meta) throw new Error(`沒有 ${ticket} 的 session 紀錄`);
   if (!fs.existsSync(meta.worktreePath)) throw new Error('worktree 已不存在，請先清除這筆再重新開始');
-  const pid = sessions.resume(ticket, { cwd: meta.worktreePath, cols, rows });
-  return { ...meta, pid, running: true };
+
+  if (hasConversation(meta.worktreePath)) {
+    const pid = sessions.resume(ticket, { cwd: meta.worktreePath, cols, rows });
+    return { ...meta, pid, running: true, note: '接回上次對話' };
+  }
+  // 沒有可接的對話（例如舊版 env 汙染導致沒存檔）→ 重新開始，任務檔還在
+  const taskFile = path.join(meta.worktreePath, TASK_FILE);
+  if (!fs.existsSync(taskFile) && jira.configured()) {
+    const { brief } = await jira.composeTaskBrief(ticket);
+    fs.writeFileSync(taskFile, brief);
+  }
+  const pid = sessions.start(ticket, { cwd: meta.worktreePath, cols, rows, initialPrompt: INITIAL_PROMPT });
+  return { ...meta, pid, running: true, note: '找不到舊對話，重新開始（worktree 內的變更都還在）' };
 });
 
 ipcMain.on('session:write', (_e, { id, data }) => sessions.write(id, data));

@@ -16,6 +16,16 @@ function resolveClaude() {
   }
 }
 
+// 清掉繼承到的 CLAUDE* 環境變數：如果 app 是從某個 Claude Code session 裡啟動的，
+// 子 claude 會以為自己是巢狀 session，對話不會正常存檔（--continue 會找不到東西）
+function cleanEnv() {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (/^CLAUDE/i.test(key)) delete env[key];
+  }
+  return env;
+}
+
 class SessionManager extends EventEmitter {
   constructor() {
     super();
@@ -31,7 +41,7 @@ class SessionManager extends EventEmitter {
       cols,
       rows,
       cwd,
-      env: process.env,
+      env: cleanEnv(),
       useConpty: true,
     });
     proc.onData((data) => this.emit('data', id, data));

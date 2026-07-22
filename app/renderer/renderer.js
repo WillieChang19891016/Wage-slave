@@ -220,6 +220,7 @@ async function openSession(ticket) {
     const meta = await ipcRenderer.invoke(channel, { ticket, cols: v.term.cols, rows: v.term.rows });
     setRunning(ticket, true);
     if (meta.summary) v.sumEl.textContent = meta.summary;
+    if (meta.note) v.term.write(`\x1b[36m[${meta.note}]\x1b[0m\r\n`);
     v.term.focus();
   } catch (e) {
     showError(e.message);
