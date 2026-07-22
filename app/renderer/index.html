@@ -19,7 +19,9 @@
         <label>Jira Domain <input id="set-domain" placeholder="onetw.atlassian.net" /></label>
         <label>Email <input id="set-email" placeholder="you@company.com" /></label>
         <label>API Token <input id="set-token" type="password" /></label>
-        <label>目標 repo 根目錄 <input id="set-repo" placeholder="C:\path\to\repo" /></label>
+        <label>repo 清單（每行一個根目錄）
+          <textarea id="set-repos" rows="4" placeholder="D:\azeroth\integratedservice&#10;D:\azeroth\adminapi"></textarea>
+        </label>
         <button id="btn-save">儲存設定</button>
       </div>
 
@@ -27,6 +29,9 @@
 
       <div class="section-title">工作區（有 worktree 的 ticket）</div>
       <ul id="session-list"><li class="muted">（無）</li></ul>
+
+      <div class="section-title">目標 repo（新開 ticket 用）</div>
+      <select id="repo-select"></select>
 
       <div class="section-title">我的 Jira tickets</div>
       <ul id="ticket-list"><li class="muted">載入中…</li></ul>

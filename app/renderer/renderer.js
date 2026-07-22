@@ -23,25 +23,58 @@ function showError(msg) {
 }
 
 // ---------- settings ----------
+function repoListFrom(s) {
+  const roots = Array.isArray(s.repoRoots) && s.repoRoots.length ? s.repoRoots : [];
+  if (s.repoRoot && !roots.includes(s.repoRoot)) roots.unshift(s.repoRoot); // 舊版單一設定相容
+  return roots;
+}
+
+function renderRepoSelect(s) {
+  const sel = $('#repo-select');
+  sel.innerHTML = '';
+  for (const root of repoListFrom(s)) {
+    const opt = document.createElement('option');
+    opt.value = root;
+    opt.textContent = root.split(/[\\/]/).filter(Boolean).pop() + '  —  ' + root;
+    if (root === s.repoRoot) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  if (!sel.options.length) {
+    const opt = document.createElement('option');
+    opt.textContent = '（請先在 ⚙ 填 repo 清單）';
+    opt.disabled = true;
+    sel.appendChild(opt);
+  }
+}
+
 async function loadSettings() {
   const s = await ipcRenderer.invoke('settings:get');
   $('#set-domain').value = s.jiraDomain || '';
   $('#set-email').value = s.jiraEmail || '';
   $('#set-token').value = s.jiraToken || '';
-  $('#set-repo').value = s.repoRoot || '';
+  $('#set-repos').value = repoListFrom(s).join('\n');
+  renderRepoSelect(s);
   return s;
 }
 
 $('#btn-settings').addEventListener('click', () => $('#settings-panel').classList.toggle('hidden'));
 $('#btn-save').addEventListener('click', async () => {
-  await ipcRenderer.invoke('settings:save', {
+  const repoRoots = $('#set-repos').value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const cur = $('#repo-select').value;
+  const s = await ipcRenderer.invoke('settings:save', {
     jiraDomain: $('#set-domain').value.trim(),
     jiraEmail: $('#set-email').value.trim(),
     jiraToken: $('#set-token').value.trim(),
-    repoRoot: $('#set-repo').value.trim(),
+    repoRoots,
+    repoRoot: repoRoots.includes(cur) ? cur : repoRoots[0] || '',
   });
+  renderRepoSelect(s);
   $('#settings-panel').classList.add('hidden');
   refreshTickets();
+});
+
+$('#repo-select').addEventListener('change', async (e) => {
+  await ipcRenderer.invoke('settings:save', { repoRoot: e.target.value });
 });
 $('#btn-refresh').addEventListener('click', () => {
   refreshTickets();
@@ -203,6 +236,14 @@ function setRunning(id, running) {
   v.running = running;
   v.dot.className = `dot ${running ? 'run' : 'dead'}`;
 }
+
+// hook 回報的即時狀態：working(🟢) / waiting(🟡) / attention(🔴)
+const STATUS_CLASS = { working: 'run', waiting: 'wait', attention: 'attn' };
+ipcRenderer.on('session:status', (_e, { id, status }) => {
+  const v = views.get(id);
+  if (!v || !v.running) return;
+  v.dot.className = `dot ${STATUS_CLASS[status] || 'run'}`;
+});
 
 // ---------- 開/接回 session ----------
 async function openSession(ticket) {

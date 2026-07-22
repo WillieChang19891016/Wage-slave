@@ -54,13 +54,17 @@ class SessionManager extends EventEmitter {
   }
 
   // 新任務：claude "<初始 prompt>" 直接帶進互動 session
-  start(id, { cwd, cols, rows, initialPrompt }) {
-    return this.spawn(id, { cwd, cols, rows, args: initialPrompt ? [initialPrompt] : [] });
+  start(id, { cwd, cols, rows, initialPrompt, settingsFile }) {
+    const args = initialPrompt ? [initialPrompt] : [];
+    if (settingsFile) args.push('--settings', settingsFile);
+    return this.spawn(id, { cwd, cols, rows, args });
   }
 
   // 接回：claude --continue 恢復該目錄最近一次對話
-  resume(id, { cwd, cols, rows }) {
-    return this.spawn(id, { cwd, cols, rows, args: ['--continue'] });
+  resume(id, { cwd, cols, rows, settingsFile }) {
+    const args = ['--continue'];
+    if (settingsFile) args.push('--settings', settingsFile);
+    return this.spawn(id, { cwd, cols, rows, args });
   }
 
   write(id, data) {

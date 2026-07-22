@@ -116,10 +116,34 @@ body {
 .sess-item button:hover { background: #30363d; }
 .sess-item button.danger:hover { background: #da3633; border-color: #da3633; }
 
-/* 狀態燈 */
-.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+/* 狀態燈：🟢 工作中 / 🟡 等輸入 / 🔴 要權限 / ⚪ 結束 */
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .dot.run { background: #3fb950; }
+.dot.wait { background: #d29922; }
+.dot.attn { background: #f85149; animation: pulse 1s infinite; }
 .dot.dead { background: #6e7681; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+#settings-panel textarea {
+  width: 100%;
+  margin-top: 3px;
+  padding: 6px 8px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font: 12px Consolas, monospace;
+  resize: vertical;
+}
+#repo-select {
+  margin: 0 12px 4px;
+  padding: 6px 8px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  max-width: calc(100% - 24px);
+}
 
 /* ---- main：split pane grid，一格一張 Jira task ---- */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }

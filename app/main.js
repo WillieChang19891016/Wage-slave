@@ -1,12 +1,13 @@
 // Wage-slave — Electron main process
 // 職責：視窗、IPC 路由、把 JiraClient / WorktreeManager / SessionManager 接起來。
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { JiraClient } = require('./src/jira-client');
 const { WorktreeManager } = require('./src/worktree-manager');
 const { SessionManager } = require('./src/session-manager');
+const { HookServer } = require('./src/hook-server');
 const { Store } = require('./src/store');
 
 const TASK_FILE = '.wage-slave-task.md';
@@ -15,26 +16,54 @@ const INITIAL_PROMPT =
   `注意：${TASK_FILE} 是本機工作檔，已被 git exclude，不要 commit 它。`;
 
 let win = null;
-let settings, state, jira, sessions;
+let settings, state, jira, sessions, hookServer;
 
 function initJira() {
   const s = settings.get();
   jira = new JiraClient({ domain: s.jiraDomain, email: s.jiraEmail, token: s.jiraToken });
 }
 
-function worktreeManager() {
-  const repoRoot = settings.get().repoRoot;
-  if (!repoRoot || !fs.existsSync(repoRoot)) throw new Error('請先在設定（⚙）填目標 repo 路徑');
-  const wm = new WorktreeManager(repoRoot);
+function worktreeManager(repoRoot) {
+  const root = repoRoot || settings.get().repoRoot;
+  if (!root || !fs.existsSync(root)) throw new Error('請先在設定（⚙）填目標 repo 路徑');
+  const wm = new WorktreeManager(root);
   wm.validate();
   return wm;
 }
 
-app.whenReady().then(() => {
+// 每個 session 一份 hooks 設定檔（claude --settings 用）
+function hookSettingsFile(ticket) {
+  const dir = path.join(app.getPath('userData'), 'hooks');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${ticket}.json`);
+  fs.writeFileSync(file, JSON.stringify(hookServer.settingsFor(ticket), null, 2));
+  return file;
+}
+
+const HOOK_STATUS = { prompt: 'working', stop: 'waiting', notification: 'attention' };
+const STATUS_TEXT = { waiting: '等你輸入', attention: '需要授權/注意' };
+
+app.whenReady().then(async () => {
+  app.setAppUserModelId('com.wage-slave.app'); // Windows 桌面通知需要
   settings = new Store(path.join(app.getPath('userData'), 'settings.json'));
   state = new Store(path.join(app.getPath('userData'), 'state.json'), { sessions: {} });
   sessions = new SessionManager();
+  hookServer = new HookServer();
+  await hookServer.start();
   initJira();
+
+  // claude hooks 回報 → 更新狀態燈；等輸入/要權限而視窗又不在前景 → 桌面通知
+  hookServer.on('hook', (event, ticket) => {
+    const status = HOOK_STATUS[event];
+    if (!status) return;
+    sendToWin('session:status', { id: ticket, status });
+    if (STATUS_TEXT[status] && win && !win.isFocused()) {
+      const summary = state.get().sessions[ticket]?.summary || '';
+      const n = new Notification({ title: `${ticket} ${STATUS_TEXT[status]}`, body: summary });
+      n.on('click', () => { win.show(); win.focus(); });
+      n.show();
+    }
+  });
 
   // 視窗關閉瞬間 claude 可能還在吐輸出，往已銷毀的 webContents send 會炸 main process
   const sendToWin = (channel, payload) => {
@@ -93,12 +122,19 @@ ipcMain.handle('session:list', () => {
 });
 
 ipcMain.handle('session:start', async (_e, { ticket, cols, rows }) => {
-  const wm = worktreeManager();
+  const repoRoot = settings.get().repoRoot;
+  const wm = worktreeManager(repoRoot);
   const { brief, summary } = await jira.composeTaskBrief(ticket);
   const wt = wm.add(ticket);
   fs.writeFileSync(path.join(wt.path, TASK_FILE), brief);
   wm.ensureExclude(TASK_FILE);
-  const pid = sessions.start(ticket, { cwd: wt.path, cols, rows, initialPrompt: INITIAL_PROMPT });
+  const pid = sessions.start(ticket, {
+    cwd: wt.path,
+    cols,
+    rows,
+    initialPrompt: INITIAL_PROMPT,
+    settingsFile: hookSettingsFile(ticket),
+  });
 
   const prev = state.get().sessions[ticket];
   const meta = {
@@ -106,6 +142,7 @@ ipcMain.handle('session:start', async (_e, { ticket, cols, rows }) => {
     summary,
     branch: wt.branch,
     worktreePath: wt.path,
+    repoRoot,
     createdAt: prev?.createdAt || new Date().toISOString(),
   };
   state.set({ sessions: { ...state.get().sessions, [ticket]: meta } });
@@ -127,8 +164,9 @@ ipcMain.handle('session:resume', async (_e, { ticket, cols, rows }) => {
   if (!meta) throw new Error(`沒有 ${ticket} 的 session 紀錄`);
   if (!fs.existsSync(meta.worktreePath)) throw new Error('worktree 已不存在，請先清除這筆再重新開始');
 
+  const settingsFile = hookSettingsFile(ticket);
   if (hasConversation(meta.worktreePath)) {
-    const pid = sessions.resume(ticket, { cwd: meta.worktreePath, cols, rows });
+    const pid = sessions.resume(ticket, { cwd: meta.worktreePath, cols, rows, settingsFile });
     return { ...meta, pid, running: true, note: '接回上次對話' };
   }
   // 沒有可接的對話（例如舊版 env 汙染導致沒存檔）→ 重新開始，任務檔還在
@@ -137,7 +175,7 @@ ipcMain.handle('session:resume', async (_e, { ticket, cols, rows }) => {
     const { brief } = await jira.composeTaskBrief(ticket);
     fs.writeFileSync(taskFile, brief);
   }
-  const pid = sessions.start(ticket, { cwd: meta.worktreePath, cols, rows, initialPrompt: INITIAL_PROMPT });
+  const pid = sessions.start(ticket, { cwd: meta.worktreePath, cols, rows, initialPrompt: INITIAL_PROMPT, settingsFile });
   return { ...meta, pid, running: true, note: '找不到舊對話，重新開始（worktree 內的變更都還在）' };
 });
 
@@ -152,7 +190,7 @@ ipcMain.handle('session:cleanup', (_e, { ticket }) => {
   const meta = state.get().sessions[ticket];
   if (meta) {
     try {
-      worktreeManager().remove(ticket);
+      worktreeManager(meta.repoRoot).remove(ticket); // 用建立當時的 repo，不受之後切換影響
     } catch {
       /* worktree 可能已被手動移除 */
     }
