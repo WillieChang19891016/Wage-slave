@@ -80,7 +80,13 @@ class SessionManager extends EventEmitter {
   }
 
   killAll() {
-    for (const proc of this.procs.values()) proc.kill();
+    for (const proc of this.procs.values()) {
+      try {
+        proc.kill();
+      } catch {
+        /* ConPTY 偶爾在關閉時丟例外，不影響結果 */
+      }
+    }
     this.procs.clear();
   }
 }

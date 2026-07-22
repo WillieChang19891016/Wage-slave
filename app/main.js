@@ -36,8 +36,12 @@ app.whenReady().then(() => {
   sessions = new SessionManager();
   initJira();
 
-  sessions.on('data', (id, data) => win?.webContents.send('pty:data', { id, data }));
-  sessions.on('exit', (id, code) => win?.webContents.send('pty:exit', { id, code }));
+  // 視窗關閉瞬間 claude 可能還在吐輸出，往已銷毀的 webContents send 會炸 main process
+  const sendToWin = (channel, payload) => {
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+  };
+  sessions.on('data', (id, data) => sendToWin('pty:data', { id, data }));
+  sessions.on('exit', (id, code) => sendToWin('pty:exit', { id, code }));
 
   win = new BrowserWindow({
     width: 1500,
@@ -55,6 +59,8 @@ app.whenReady().then(() => {
     if (level >= 2) console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.on('close', () => sessions.killAll()); // 先收掉所有 pty 再讓視窗關
+  win.on('closed', () => { win = null; });
 });
 
 app.on('window-all-closed', () => {
