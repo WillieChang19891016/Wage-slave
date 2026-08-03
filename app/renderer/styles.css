@@ -187,6 +187,21 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pane-head .chg { color: #d29922; font-size: 11px; white-space: nowrap; }
+.pane-head .chg.none { color: #565e66; }
+.pane-head button.mr {
+  font-size: 11px;
+  padding: 1px 8px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #79c0ff;
+  border-radius: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pane-head button.mr:hover { background: #30363d; }
+.pane-head button.mr:disabled { opacity: 0.5; cursor: default; }
+.sess-item button.mrlink { color: #79c0ff; }
 .pane-head .close { color: #565e66; padding: 0 5px; border-radius: 4px; }
 .pane-head .close:hover { background: #30363d; color: #f85149; }
 .pane-body { flex: 1; min-height: 0; position: relative; padding: 4px; }

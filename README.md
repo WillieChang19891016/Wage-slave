@@ -5,7 +5,8 @@ Jira-Driven 多 Agent 並行 IDE — 點一張 Jira ticket，自動開 git workt
 ## 目前進度
 
 - ✅ **Phase 0**：三個技術 spike 全數驗證通過（2026-07-21）
-- 🚧 **Phase 1**：[app/](./app/) — Electron 主程式（Jira 側欄 + 多 tab terminal + worktree 自動化），模組冒煙測試已過，GUI 驗收中
+- ✅ **Phase 1**：[app/](./app/) — Electron 主程式（Jira 側欄 + split pane grid + worktree 自動化），驗收全過（2026-07-22）
+- 🚧 **Phase 2**：hook 狀態燈 + 桌面通知 + 多 repo（已驗收）；git 變更摘要 + 一鍵 push/Draft MR/Jira 回填（2026-08-03 實作完成，待實機驗收，清單見 [app/README.md](./app/README.md)）
 
 ```powershell
 cd app; npm install; npm start

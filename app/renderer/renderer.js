@@ -1,4 +1,4 @@
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, shell } = require('electron');
 const { Terminal } = require('@xterm/xterm');
 const { FitAddon } = require('@xterm/addon-fit');
 
@@ -52,6 +52,7 @@ async function loadSettings() {
   $('#set-domain').value = s.jiraDomain || '';
   $('#set-email').value = s.jiraEmail || '';
   $('#set-token').value = s.jiraToken || '';
+  $('#set-gitlab-token').value = s.gitlabToken || '';
   $('#set-repos').value = repoListFrom(s).join('\n');
   renderRepoSelect(s);
   return s;
@@ -65,6 +66,7 @@ $('#btn-save').addEventListener('click', async () => {
     jiraDomain: $('#set-domain').value.trim(),
     jiraEmail: $('#set-email').value.trim(),
     jiraToken: $('#set-token').value.trim(),
+    gitlabToken: $('#set-gitlab-token').value.trim(),
     repoRoots,
     repoRoot: repoRoots.includes(cur) ? cur : repoRoots[0] || '',
   });
@@ -131,6 +133,14 @@ async function refreshSessions() {
     const btnOpen = document.createElement('button');
     btnOpen.textContent = running ? '切換' : '接回';
     btnOpen.addEventListener('click', () => openSession(s.ticket));
+    let btnMrLink = null;
+    if (s.mrUrl) {
+      btnMrLink = document.createElement('button');
+      btnMrLink.textContent = 'MR ↗';
+      btnMrLink.className = 'mrlink';
+      btnMrLink.title = s.mrUrl;
+      btnMrLink.addEventListener('click', () => shell.openExternal(s.mrUrl));
+    }
     const btnClean = document.createElement('button');
     btnClean.textContent = '清除';
     btnClean.className = 'danger';
@@ -142,6 +152,7 @@ async function refreshSessions() {
       refreshTickets();
     });
     li.appendChild(btnOpen);
+    if (btnMrLink) li.appendChild(btnMrLink);
     li.appendChild(btnClean);
     sessionListEl.appendChild(li);
   }
@@ -174,6 +185,17 @@ function createView(id, summary = '') {
   const sum = document.createElement('span');
   sum.className = 'sum';
   sum.textContent = summary;
+  const chg = document.createElement('span');
+  chg.className = 'chg';
+  chg.title = '⇡ 領先 base 的 commit 數 / ± 未 commit 的檔案數';
+  const btnMr = document.createElement('button');
+  btnMr.className = 'mr';
+  btnMr.textContent = 'MR';
+  btnMr.title = 'push 分支 + 開 GitLab Draft MR + 回填 Jira comment';
+  btnMr.addEventListener('click', (e) => {
+    e.stopPropagation();
+    publish(id, btnMr);
+  });
   const close = document.createElement('span');
   close.className = 'close';
   close.textContent = '×';
@@ -184,7 +206,7 @@ function createView(id, summary = '') {
     removeView(id);
     refreshSessions();
   });
-  head.append(dot, key, sum, close);
+  head.append(dot, key, sum, chg, btnMr, close);
 
   const body = document.createElement('div');
   body.className = 'pane-body';
@@ -204,7 +226,7 @@ function createView(id, summary = '') {
   term.onResize(({ cols, rows }) => ipcRenderer.send('session:resize', { id, cols, rows }));
   pane.addEventListener('mousedown', () => activate(id));
 
-  const view = { term, fit, pane, dot, sumEl: sum, running: false };
+  const view = { term, fit, pane, dot, sumEl: sum, chgEl: chg, running: false, lastChanges: null };
   views.set(id, view);
   relayout();
   return view;
@@ -243,7 +265,48 @@ ipcRenderer.on('session:status', (_e, { id, status }) => {
   const v = views.get(id);
   if (!v || !v.running) return;
   v.dot.className = `dot ${STATUS_CLASS[status] || 'run'}`;
+  if (status === 'waiting') refreshChanges(id); // 回完話的瞬間變更數最可能剛變，馬上刷
 });
+
+// ---------- pane header 的 git 變更摘要 ----------
+async function refreshChanges(id) {
+  const v = views.get(id);
+  if (!v) return;
+  const c = await ipcRenderer.invoke('session:changes', { ticket: id });
+  const v2 = views.get(id); // invoke 期間 pane 可能已被關掉
+  if (!v2) return;
+  v2.lastChanges = c;
+  if (!c) {
+    v2.chgEl.textContent = '';
+    return;
+  }
+  const parts = [];
+  if (c.ahead) parts.push(`⇡${c.ahead}`);
+  if (c.dirty) parts.push(`±${c.dirty}`);
+  v2.chgEl.textContent = parts.length ? parts.join(' ') : '無變更';
+  v2.chgEl.classList.toggle('none', !parts.length);
+}
+setInterval(() => {
+  for (const id of views.keys()) refreshChanges(id);
+}, 5000);
+
+// ---------- 一鍵 push + Draft MR + 回填 Jira ----------
+async function publish(id, btn) {
+  const dirty = views.get(id)?.lastChanges?.dirty || 0;
+  if (dirty && !confirm(`${id} 還有 ${dirty} 個檔案未 commit（不會進 MR）。\n仍要 push 已 commit 的部分並開 Draft MR?`)) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await ipcRenderer.invoke('session:publish', { ticket: id });
+    refreshChanges(id);
+    refreshSessions(); // 側欄長出 MR ↗ 鈕
+    if (confirm(`${r.note}\n${r.mrUrl}\n\n在瀏覽器打開 MR?`)) shell.openExternal(r.mrUrl);
+  } catch (e) {
+    showError(e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'MR';
+}
 
 // ---------- 開/接回 session ----------
 async function openSession(ticket) {
@@ -266,6 +329,7 @@ async function openSession(ticket) {
     if (meta.summary) v.sumEl.textContent = meta.summary;
     if (meta.note) v.term.write(`\x1b[36m[${meta.note}]\x1b[0m\r\n`);
     v.term.focus();
+    refreshChanges(ticket);
   } catch (e) {
     showError(e.message);
     v.term.write(`\x1b[31m${e.message}\x1b[0m\r\n`);

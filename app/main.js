@@ -4,7 +4,9 @@ const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { execFile } = require('child_process');
 const { JiraClient } = require('./src/jira-client');
+const { GitLabClient, parseRemote } = require('./src/gitlab-client');
 const { WorktreeManager } = require('./src/worktree-manager');
 const { SessionManager } = require('./src/session-manager');
 const { HookServer } = require('./src/hook-server');
@@ -183,6 +185,85 @@ ipcMain.on('session:write', (_e, { id, data }) => sessions.write(id, data));
 ipcMain.on('session:resize', (_e, { id, cols, rows }) => sessions.resize(id, cols, rows));
 
 ipcMain.handle('session:kill', (_e, { ticket }) => sessions.kill(ticket));
+
+// 非阻塞 git（push 可能好幾秒，WorktreeManager 的 sync 版會卡住 main process）
+const gitAsync = (cwd, ...args) =>
+  new Promise((resolve, reject) => {
+    execFile('git', args, { cwd, encoding: 'utf8' }, (err, stdout, stderr) => {
+      if (err) reject(new Error((stderr || err.message).toString().trim()));
+      else resolve(stdout.trim());
+    });
+  });
+
+// worktree 的 base 分支名（origin/HEAD → 'main'）；沒設 origin/HEAD 回 null
+async function baseBranch(wt) {
+  try {
+    return (await gitAsync(wt, 'symbolic-ref', 'refs/remotes/origin/HEAD')).replace(/^refs\/remotes\/origin\//, '');
+  } catch {
+    return null;
+  }
+}
+
+// pane header 的 git 變更摘要：ahead = 領先 base 的 commit 數，dirty = 未 commit 檔案數
+ipcMain.handle('session:changes', async (_e, { ticket }) => {
+  const meta = state.get().sessions[ticket];
+  if (!meta || !fs.existsSync(meta.worktreePath)) return null;
+  const wt = meta.worktreePath;
+  try {
+    const status = await gitAsync(wt, 'status', '--porcelain');
+    const dirty = status ? status.split('\n').filter(Boolean).length : 0;
+    let ahead = 0;
+    const base = await baseBranch(wt);
+    if (base) ahead = parseInt(await gitAsync(wt, 'rev-list', '--count', `origin/${base}..HEAD`), 10) || 0;
+    return { dirty, ahead, mrUrl: meta.mrUrl || null };
+  } catch {
+    return null; // worktree 半殘（例如手動刪到一半）→ header 不顯示就好，別炸
+  }
+});
+
+// 一鍵發布：push 分支 → 開 GitLab Draft MR（冪等）→ 回填 Jira comment
+ipcMain.handle('session:publish', async (_e, { ticket }) => {
+  const meta = state.get().sessions[ticket];
+  if (!meta) throw new Error(`沒有 ${ticket} 的 session 紀錄`);
+  const wt = meta.worktreePath;
+  if (!fs.existsSync(wt)) throw new Error('worktree 已不存在');
+  const s = settings.get();
+  if (!s.gitlabToken) throw new Error('請先在設定（⚙）填 GitLab token（scope: api）');
+
+  const remote = await gitAsync(wt, 'remote', 'get-url', 'origin');
+  const { host, project } = parseRemote(remote);
+
+  let target = await baseBranch(wt);
+  if (target) {
+    const ahead = parseInt(await gitAsync(wt, 'rev-list', '--count', `origin/${target}..HEAD`), 10) || 0;
+    if (!ahead) throw new Error(`分支 ${meta.branch} 尚無新 commit，先讓 claude commit 再開 MR`);
+  }
+
+  await gitAsync(wt, 'push', '-u', 'origin', meta.branch);
+
+  const gl = new GitLabClient({ host, token: s.gitlabToken });
+  if (!target) target = (await gl.project(project)).default_branch;
+  const mr = await gl.ensureDraftMr({
+    project,
+    sourceBranch: meta.branch,
+    targetBranch: target,
+    title: `Draft: ${ticket} ${meta.summary || ''}`.trim(),
+    description: `Jira: https://${s.jiraDomain}/browse/${ticket}`,
+  });
+
+  let note = mr.existed ? '已 push（MR 先前已開過，沿用）' : '已 push + 開 Draft MR';
+  if (!mr.existed && jira.configured()) {
+    // Jira 回填失敗不擋流程：MR 已經開了，只是連結要自己貼
+    try {
+      await jira.addComment(ticket, 'Draft MR:', mr.web_url);
+      note += '，已回填 Jira comment';
+    } catch (err) {
+      note += `（Jira 回填失敗：${String(err.message).slice(0, 120)}）`;
+    }
+  }
+  state.set({ sessions: { ...state.get().sessions, [ticket]: { ...meta, mrUrl: mr.web_url } } });
+  return { mrUrl: mr.web_url, note };
+});
 
 // 清除：kill process + 移除 worktree/分支 + 刪紀錄（worktree 內未 push 的工作會消失）
 ipcMain.handle('session:cleanup', (_e, { ticket }) => {

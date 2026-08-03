@@ -73,6 +73,15 @@ class JiraClient {
     return this.api('GET', `/issue/${encodeURIComponent(key)}?fields=${fields.join(',')}`);
   }
 
+  // 在 ticket 留言（回填 MR 連結用）。v3 comment body 必須是 ADF。
+  addComment(key, text, url) {
+    const content = [{ type: 'text', text: text + ' ' }];
+    if (url) content.push({ type: 'text', text: url, marks: [{ type: 'link', attrs: { href: url } }] });
+    return this.api('POST', `/issue/${encodeURIComponent(key)}/comment`, {
+      body: { type: 'doc', version: 1, content: [{ type: 'paragraph', content }] },
+    });
+  }
+
   // 組任務簡報（markdown）：主 ticket + parent + issue links 的內容。
   // 背景：公司的子單描述常只寫「請查看主單」，不跟關聯單抓內容 prompt 會是空的。
   async composeTaskBrief(key) {

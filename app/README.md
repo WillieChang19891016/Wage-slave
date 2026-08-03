@@ -24,7 +24,8 @@ npm start
 
 ```
 main.js                 Electron main：IPC 路由
-src/jira-client.js      Jira Cloud REST v3 + ADF→text + composeTaskBrief（跟關聯單）
+src/jira-client.js      Jira Cloud REST v3 + ADF→text + composeTaskBrief（跟關聯單）+ addComment
+src/gitlab-client.js    GitLab REST v4：remote URL 解析 + ensureDraftMr（冪等開 Draft MR）
 src/worktree-manager.js git worktree add/remove + .worktreeinclude + info/exclude
 src/session-manager.js  @lydell/node-pty spawn claude.exe（直接 spawn，不經 cmd，避免 quoting）
 src/store.js            settings.json / state.json（%APPDATA%\wage-slave\）
@@ -56,5 +57,18 @@ renderer/               vanilla JS + xterm.js（無 bundler）
 - [x] 狀態燈三態：🟢 工作中 / 🟡 等輸入 / 🔴 要權限（pulse）
 - [x] 視窗不在前景時桌面通知，點通知聚焦視窗
 - [x] 多 repo：設定填 repo 清單，側欄下拉選目標 repo，session 綁定建立當時的 repo
-- [ ] git 變更摘要顯示在 pane header
-- [ ] 一鍵 push + 開 GitLab Draft MR + 回填 Jira comment
+- [x] git 變更摘要顯示在 pane header（`⇡N` 領先 base 的 commit 數 / `±N` 未 commit 檔案數；
+  5 秒輪詢 + claude 回完話（Stop hook）立即刷新）
+- [x] 一鍵 push + 開 GitLab Draft MR + 回填 Jira comment（2026-08-03 實作，待實機驗收）
+  - pane header「MR」鈕：push 分支 → 開 Draft MR → Jira ticket 留 MR 連結
+  - GitLab host/project 從 `git remote get-url origin` 解析，只需在 ⚙ 補一個 GitLab token（scope: api）
+  - 冪等：同分支已有 open MR 就沿用，不會開第二張；Jira 回填失敗不擋流程
+  - 側欄工作區清單有「MR ↗」鈕可隨時再開瀏覽器
+  - 防呆：分支無新 commit 直接擋下；有未 commit 檔案先 confirm
+
+### 一鍵 MR 實機驗收清單（待跑）
+
+- [ ] 對真 GitLab repo 按 MR：push 成功、Draft MR 開出、Jira comment 出現連結
+- [ ] 再按一次 MR：不會開第二張，沿用同一張
+- [ ] 分支沒 commit 時按 MR：被擋下並提示
+- [ ] repo 沒設 origin/HEAD 時：target branch 正確 fallback 到 GitLab default branch
