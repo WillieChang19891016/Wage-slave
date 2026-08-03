@@ -78,6 +78,7 @@ app.whenReady().then(async () => {
     width: 1500,
     height: 900,
     title: 'Wage-slave',
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     backgroundColor: '#0d1117',
     webPreferences: {
       // Phase 1 沿用 spike 的便宜行事；上架/分發前要改 preload + contextBridge

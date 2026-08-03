@@ -30,6 +30,7 @@ src/worktree-manager.js git worktree add/remove + .worktreeinclude + info/exclud
 src/session-manager.js  @lydell/node-pty spawn claude.exe（直接 spawn，不經 cmd，避免 quoting）
 src/store.js            settings.json / state.json（%APPDATA%\wage-slave\）
 renderer/               vanilla JS + xterm.js（無 bundler）
+assets/                 icon.ico + make-icon.js（零依賴產生器，node assets/make-icon.js 重生成）
 ```
 
 設計筆記：
