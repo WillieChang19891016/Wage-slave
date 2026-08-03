@@ -102,6 +102,15 @@ body {
 /* 工作區 session 項目 */
 .sess-item .row1 { display: flex; align-items: center; gap: 6px; }
 .sess-item .key { color: #d2a8ff; font-weight: 600; flex: 1; }
+.sess-item .chip {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.sess-item .chip.done { background: #23863633; color: #3fb950; }
+.sess-item.jira-done .key,
+.sess-item.jira-done .branch { opacity: 0.6; }
 .sess-item .branch { color: #565e66; font-size: 11px; display: block; margin: 2px 0 6px; }
 .sess-item button {
   font-size: 11px;

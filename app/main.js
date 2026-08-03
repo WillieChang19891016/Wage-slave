@@ -114,6 +114,27 @@ ipcMain.handle('jira:list', async () => {
   return jira.myOpenIssues();
 });
 
+// 工作區 ticket 的 Jira 狀態（Done 徽章用）。逐張查而不是 JQL in()：
+// 單被刪/無權限時 JQL 會整包 400，逐張查壞的只是缺那一張。
+ipcMain.handle('jira:statuses', async (_e, { tickets }) => {
+  if (!jira.configured()) return {};
+  const out = {};
+  await Promise.all(
+    tickets.map(async (t) => {
+      try {
+        const i = await jira.issue(t, ['status']);
+        out[t] = {
+          name: i.fields.status?.name || '?',
+          done: i.fields.status?.statusCategory?.key === 'done',
+        };
+      } catch {
+        /* 查不到就不標 */
+      }
+    })
+  );
+  return out;
+});
+
 // ---- sessions ----
 ipcMain.handle('session:list', () => {
   const all = state.get().sessions;
@@ -216,7 +237,14 @@ ipcMain.handle('session:changes', async (_e, { ticket }) => {
     let ahead = 0;
     const base = await baseBranch(wt);
     if (base) ahead = parseInt(await gitAsync(wt, 'rev-list', '--count', `origin/${base}..HEAD`), 10) || 0;
-    return { dirty, ahead, mrUrl: meta.mrUrl || null };
+    let unpushed = null; // null = 遠端分支不存在（從沒 push 過）
+    try {
+      await gitAsync(wt, 'rev-parse', '--verify', '--quiet', `refs/remotes/origin/${meta.branch}`);
+      unpushed = parseInt(await gitAsync(wt, 'rev-list', '--count', `origin/${meta.branch}..HEAD`), 10) || 0;
+    } catch {
+      /* 沒 push 過 */
+    }
+    return { dirty, ahead, unpushed, mrUrl: meta.mrUrl || null };
   } catch {
     return null; // worktree 半殘（例如手動刪到一半）→ header 不顯示就好，別炸
   }

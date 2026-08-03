@@ -67,6 +67,12 @@ assets/                 icon.ico + make-icon.js（零依賴產生器，node asse
   - 側欄工作區清單有「MR ↗」鈕可隨時再開瀏覽器
   - 防呆：分支無新 commit 直接擋下；有未 commit 檔案先 confirm
 
+- [x] 工作區比對 Jira 狀態（2026-08-03）：已 Done 的單顯示「已 Done」徽章並淡化，
+  一眼看出可清的殭屍工作區（60 秒快取，⟳ 強制刷新）；worktree/分支仍由人手動「清除」，
+  app 永不自動刪本地工作
+- [x] 清除 confirm 升級：顯示 Jira 是否已 Done + 未 commit 檔數 + 未 push commit 數，
+  都推乾淨會明說「可安全清除」
+
 ### 一鍵 MR 實機驗收清單（待跑）
 
 - [ ] 對真 GitLab repo 按 MR：push 成功、Draft MR 開出、Jira comment 出現連結

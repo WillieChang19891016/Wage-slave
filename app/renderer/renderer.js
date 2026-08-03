@@ -79,6 +79,7 @@ $('#repo-select').addEventListener('change', async (e) => {
   await ipcRenderer.invoke('settings:save', { repoRoot: e.target.value });
 });
 $('#btn-refresh').addEventListener('click', () => {
+  statusCache.at = 0; // ⟳ 要拿到最新的 Jira 狀態，跳過快取
   refreshTickets();
   refreshSessions();
 });
@@ -115,6 +116,28 @@ function escapeHtml(s) {
 }
 
 // ---------- 工作區 session 清單 ----------
+// 工作區 ticket 的 Jira 狀態快取（60 秒 TTL；⟳ 會強制刷新）
+let jiraStatuses = {};
+let statusCache = { at: 0, key: '' };
+async function markDoneBadges(rows) {
+  const tickets = [...rows.keys()];
+  if (!tickets.length) return;
+  const key = tickets.slice().sort().join(',');
+  if (key !== statusCache.key || Date.now() - statusCache.at > 60000) {
+    jiraStatuses = await ipcRenderer.invoke('jira:statuses', { tickets });
+    statusCache = { at: Date.now(), key };
+  }
+  for (const [ticket, li] of rows) {
+    if (!li.isConnected || !jiraStatuses[ticket]?.done) continue; // 清單可能已重畫
+    li.classList.add('jira-done');
+    const chip = document.createElement('span');
+    chip.className = 'chip done';
+    chip.textContent = '已 Done';
+    chip.title = 'Jira 已完成 — worktree 若已 push 可安心清除';
+    li.querySelector('.row1').appendChild(chip);
+  }
+}
+
 async function refreshSessions() {
   persisted = await ipcRenderer.invoke('session:list');
   sessionListEl.innerHTML = '';
@@ -122,9 +145,11 @@ async function refreshSessions() {
     sessionListEl.innerHTML = '<li class="muted">（無）</li>';
     return;
   }
+  const rows = new Map();
   for (const s of persisted) {
     const li = document.createElement('li');
     li.className = 'sess-item';
+    rows.set(s.ticket, li);
     const running = views.get(s.ticket)?.running || s.running;
     li.innerHTML =
       `<div class="row1"><span class="dot ${running ? 'run' : 'dead'}"></span>` +
@@ -145,7 +170,24 @@ async function refreshSessions() {
     btnClean.textContent = '清除';
     btnClean.className = 'danger';
     btnClean.addEventListener('click', async () => {
-      if (!confirm(`清除 ${s.ticket}?\n會 kill session、移除 worktree 和分支，未 push 的變更會消失。`)) return;
+      // 清除前把風險攤開：Jira 是否已 Done、有沒有沒 push / 沒 commit 的工作
+      let risk = '\n未 push 的變更會消失。';
+      try {
+        const c = await ipcRenderer.invoke('session:changes', { ticket: s.ticket });
+        if (c) {
+          const bits = [];
+          if (c.dirty) bits.push(`${c.dirty} 個檔案未 commit`);
+          if (c.unpushed === null && c.ahead) bits.push(`分支從未 push（${c.ahead} 個 commit）`);
+          else if (c.unpushed) bits.push(`${c.unpushed} 個 commit 未 push`);
+          risk = bits.length
+            ? `\n⚠ ${bits.join('、')} — 清除後會永久消失！`
+            : '\n本地工作都已 push，可安全清除。';
+        }
+      } catch {
+        /* 拿不到 git 狀態就用預設警語 */
+      }
+      const doneTag = jiraStatuses[s.ticket]?.done ? '（Jira 已 Done）' : '';
+      if (!confirm(`清除 ${s.ticket}${doneTag}?\n會 kill session、移除 worktree 和分支。${risk}`)) return;
       await ipcRenderer.invoke('session:cleanup', { ticket: s.ticket });
       removeView(s.ticket);
       await refreshSessions();
@@ -156,6 +198,7 @@ async function refreshSessions() {
     li.appendChild(btnClean);
     sessionListEl.appendChild(li);
   }
+  markDoneBadges(rows); // 不 await：徽章慢慢補，別擋清單顯示
 }
 
 // ---------- terminal grid：一格一張 Jira task，全部同時可見 ----------
